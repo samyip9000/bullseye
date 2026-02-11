@@ -2,6 +2,12 @@
 
 A hackathon MVP for building and backtesting trading strategies on RobinPump bonding curve tokens (Base network).
 
+## Screenshots
+
+![Alt text](screenshot/screener.png)
+
+![Alt text](screenshots/strategy.png)
+
 ## Features
 
 - **Token Screener** — Real-time token data from RobinPump via Goldsky subgraph. Custom filters on market cap, price, ETH collected, and graduation status.

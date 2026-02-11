@@ -9,6 +9,10 @@ import {
   Sparkles,
   X,
   Shuffle,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import FilterBuilder from "./FilterBuilder";
 import type { Token, FilterRule } from "../types";
@@ -194,6 +198,11 @@ export default function Screener({
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [screenerName, setScreenerName] = useState("");
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+
+  // Pagination
+  const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState<number>(25);
 
   // Natural-language filter input
   const [nlQuery, setNlQuery] = useState("");
@@ -381,6 +390,34 @@ export default function Screener({
     return result;
   }, [tokens, filters, search, sortField, sortDir]);
 
+  // Reset to page 1 when filters, search, sort, or rowsPerPage change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters, search, sortField, sortDir, rowsPerPage]);
+
+  // Pagination derived values
+  const totalPages = Math.max(1, Math.ceil(filteredTokens.length / rowsPerPage));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+
+  const paginatedTokens = useMemo(() => {
+    const start = (safeCurrentPage - 1) * rowsPerPage;
+    return filteredTokens.slice(start, start + rowsPerPage);
+  }, [filteredTokens, safeCurrentPage, rowsPerPage]);
+
+  const rangeStart = filteredTokens.length === 0 ? 0 : (safeCurrentPage - 1) * rowsPerPage + 1;
+  const rangeEnd = Math.min(safeCurrentPage * rowsPerPage, filteredTokens.length);
+
+  // Generate visible page numbers (max 5 around current page)
+  const pageNumbers = useMemo(() => {
+    const pages: number[] = [];
+    const maxVisible = 5;
+    let start = Math.max(1, safeCurrentPage - Math.floor(maxVisible / 2));
+    const end = Math.min(totalPages, start + maxVisible - 1);
+    start = Math.max(1, end - maxVisible + 1);
+    for (let i = start; i <= end; i++) pages.push(i);
+    return pages;
+  }, [safeCurrentPage, totalPages]);
+
   const handleSaveScreener = async () => {
     if (!screenerName.trim()) {
       setSaveMsg("Enter a name first");
@@ -421,7 +458,9 @@ export default function Screener({
             Token Screener
           </h2>
           <span className="text-[0.65rem] font-mono text-phosphor">
-            {filteredTokens.length} results
+            {filteredTokens.length === 0
+              ? "0 results"
+              : `${rangeStart}–${rangeEnd} of ${filteredTokens.length}`}
           </span>
           {saveMsg && (
             <span className="text-[0.65rem] font-mono text-phosphor animate-pulse">
@@ -664,7 +703,7 @@ export default function Screener({
                 </td>
               </tr>
             ) : (
-              filteredTokens.map((token) => (
+              paginatedTokens.map((token) => (
                 <tr
                   key={token.id}
                   className="token-row border-b border-white/[0.015] hover:bg-phosphor/[0.02] transition-all"
@@ -720,6 +759,93 @@ export default function Screener({
           </tbody>
         </table>
       </div>
+
+      {/* Pagination Controls */}
+      {filteredTokens.length > 0 && (
+        <div className="flex items-center justify-between px-4 py-3 border-t border-white/[0.03] bg-obsidian-surface flex-shrink-0">
+          {/* Rows per page selector */}
+          <div className="flex items-center gap-2">
+            <span className="text-[0.65rem] text-gray-500 uppercase tracking-wider font-bold">
+              Rows
+            </span>
+            <select
+              value={rowsPerPage}
+              onChange={(e) => setRowsPerPage(Number(e.target.value))}
+              className="bg-white/[0.03] border border-white/[0.08] text-gray-300 font-mono text-xs px-2 py-1 rounded cursor-pointer hover:border-phosphor/30 transition-colors focus:outline-none focus:border-phosphor/40"
+            >
+              {PAGE_SIZE_OPTIONS.map((size) => (
+                <option key={size} value={size} className="bg-[#0a0a0a]">
+                  {size}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Page info */}
+          <span className="text-[0.65rem] font-mono text-gray-500">
+            Page {safeCurrentPage} of {totalPages}
+          </span>
+
+          {/* Page navigation */}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setCurrentPage(1)}
+              disabled={safeCurrentPage <= 1}
+              className="p-1.5 rounded text-gray-500 hover:text-phosphor hover:bg-phosphor/[0.06] disabled:opacity-25 disabled:cursor-not-allowed transition-all"
+              title="First page"
+            >
+              <ChevronsLeft className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={safeCurrentPage <= 1}
+              className="p-1.5 rounded text-gray-500 hover:text-phosphor hover:bg-phosphor/[0.06] disabled:opacity-25 disabled:cursor-not-allowed transition-all"
+              title="Previous page"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+
+            {pageNumbers[0] > 1 && (
+              <span className="text-gray-600 text-xs px-1">...</span>
+            )}
+
+            {pageNumbers.map((page) => (
+              <button
+                key={page}
+                onClick={() => setCurrentPage(page)}
+                className={`min-w-[28px] h-7 rounded text-xs font-mono transition-all ${
+                  page === safeCurrentPage
+                    ? "bg-phosphor/10 border border-phosphor/30 text-phosphor font-bold"
+                    : "text-gray-500 hover:text-gray-300 hover:bg-white/[0.03]"
+                }`}
+              >
+                {page}
+              </button>
+            ))}
+
+            {pageNumbers[pageNumbers.length - 1] < totalPages && (
+              <span className="text-gray-600 text-xs px-1">...</span>
+            )}
+
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={safeCurrentPage >= totalPages}
+              className="p-1.5 rounded text-gray-500 hover:text-phosphor hover:bg-phosphor/[0.06] disabled:opacity-25 disabled:cursor-not-allowed transition-all"
+              title="Next page"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setCurrentPage(totalPages)}
+              disabled={safeCurrentPage >= totalPages}
+              className="p-1.5 rounded text-gray-500 hover:text-phosphor hover:bg-phosphor/[0.06] disabled:opacity-25 disabled:cursor-not-allowed transition-all"
+              title="Last page"
+            >
+              <ChevronsRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
