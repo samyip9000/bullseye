@@ -4,7 +4,7 @@ A hackathon MVP for building and backtesting trading strategies on RobinPump bon
 
 ## Screenshots
 
-![Alt text](screenshot/screener.png)
+![Alt text](screenshots/screener.png)
 
 ![Alt text](screenshots/strategy.png)
 
@@ -18,6 +18,7 @@ A hackathon MVP for building and backtesting trading strategies on RobinPump bon
 ## Tech Stack
 
 - **Frontend:** React 19 + Vite + TailwindCSS + Recharts
+- **Wallet & Onchain:** Base SDK (Account) + Viem
 - **Backend:** Bun + Hono + SQLite (bun:sqlite)
 - **Data:** RobinPump Goldsky Subgraph (Base mainnet)
 

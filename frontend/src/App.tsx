@@ -4,6 +4,7 @@ import Header from "./components/Header";
 import Screener from "./components/Screener";
 import StrategyView from "./components/StrategyView";
 import StrategyDashboard from "./components/StrategyDashboard";
+import StrategyDetail from "./components/StrategyDetail";
 import type { Token } from "./types";
 import { getTokens } from "./services/api";
 
@@ -110,6 +111,7 @@ export default function App() {
               />
             }
           />
+          <Route path="/strategy/:id" element={<StrategyDetail />} />
         </Routes>
       </main>
     </div>

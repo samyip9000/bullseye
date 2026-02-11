@@ -223,7 +223,7 @@ export default function StrategyDashboard() {
                   className={`${
                     isWide ? "col-span-2" : "col-span-1"
                   } bg-white/[0.02] border border-white/[0.06] rounded-xl p-5 hover:border-phosphor/20 transition-all group cursor-pointer relative`}
-                  onClick={() => navigate("/strategy")}
+                  onClick={() => navigate(`/strategy/${strategy.id}`)}
                 >
                   {/* Delete button */}
                   <button

@@ -143,6 +143,22 @@ export async function getStrategies(): Promise<{ strategies: Strategy[] }> {
   return fetchJson("/strategies");
 }
 
+export async function getStrategy(
+  id: string
+): Promise<Strategy & { latestBacktest: { id: string; result: BacktestResult } | null }> {
+  return fetchJson(`/strategies/${id}`);
+}
+
+export async function updateStrategy(
+  id: string,
+  data: Partial<{ name: string; strategyType: string; params: StrategyParams }>
+): Promise<Strategy> {
+  return fetchJson(`/strategies/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+}
+
 export async function createStrategy(data: {
   name: string;
   tokenAddress: string;
