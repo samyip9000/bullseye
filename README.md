@@ -3,6 +3,8 @@
 **Text-to-Trade Agent for RobinPump.fun**
 Set-and-forget memecoin trading bots that live on your social channels.
 
+[![Demo Video](https://img.shields.io/badge/Demo-YouTube-red?logo=youtube)](https://youtu.be/vOLPGIlI_E8)
+
 ---
 
 Bullseye turns Telegram into a remote control for on-chain trading. Scan hundreds of RobinPump bonding curve tokens, build strategies with plain English, backtest against real trade history, then deploy -- all without leaving your chat. When a strategy fires, the trade executes directly on Base through your connected wallet.
