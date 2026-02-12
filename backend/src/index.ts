@@ -6,6 +6,8 @@ import { join } from "path";
 import tokenRoutes from "./routes/tokens";
 import screenerRoutes from "./routes/screeners";
 import strategyRoutes from "./routes/strategies";
+import telegramRoutes from "./routes/telegram";
+import { startBot } from "./services/telegram-bot";
 
 const app = new Hono();
 
@@ -24,6 +26,7 @@ app.use(
 app.route("/api/tokens", tokenRoutes);
 app.route("/api/screeners", screenerRoutes);
 app.route("/api/strategies", strategyRoutes);
+app.route("/api/telegram", telegramRoutes);
 
 // ---------- Health Check ----------
 app.get("/api/health", (c) => {
@@ -65,6 +68,9 @@ console.log(`
   ║   http://localhost:${PORT}             ║
   ╚══════════════════════════════════════╝
 `);
+
+// Start Telegram bot polling in the background
+startBot();
 
 export default {
   port: PORT,
