@@ -16,9 +16,11 @@ import {
   Check,
   Clock,
   ArrowDownUp,
+  Rocket,
 } from "lucide-react";
 import { parseEther, formatEther, formatUnits } from "viem";
 import BacktestResults from "./BacktestResults";
+import ExecuteConfirmModal from "./ExecuteConfirmModal";
 import { useWallet } from "../contexts/WalletContext";
 import {
   BONDING_CURVE_ABI,
@@ -29,13 +31,16 @@ import {
   DEFAULT_DEADLINE_SECONDS,
 } from "../lib/robinpump/abis";
 import type {
+  Token,
   Strategy,
   StrategyType,
   StrategyParams,
   BacktestResult,
+  LiveStrategy,
 } from "../types";
 import {
   getStrategy,
+  getToken,
   updateStrategy,
   deleteStrategy,
   runBacktest,
@@ -78,7 +83,15 @@ const STRATEGY_TYPES: { value: StrategyType; label: string; desc: string }[] = [
   },
 ];
 
-export default function StrategyDetail() {
+interface StrategyDetailProps {
+  onExecuteStrategy?: (strategy: LiveStrategy) => void;
+  walletEthBalance?: string | null;
+}
+
+export default function StrategyDetail({
+  onExecuteStrategy,
+  walletEthBalance,
+}: StrategyDetailProps) {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
@@ -113,6 +126,10 @@ export default function StrategyDetail() {
   const [tradeStatus, setTradeStatus] = useState<string | null>(null);
   const [tradeError, setTradeError] = useState<string | null>(null);
   const [ethUsdPrice, setEthUsdPrice] = useState<number | null>(null);
+
+  // Execute strategy modal
+  const [tokenData, setTokenData] = useState<Token | null>(null);
+  const [showExecuteModal, setShowExecuteModal] = useState(false);
 
   const { isConnected, walletClient, address, publicClient, refreshBalances } =
     useWallet();
@@ -264,6 +281,27 @@ export default function StrategyDetail() {
         const minEthOut =
           (ethOut * BigInt(10000 - DEFAULT_SLIPPAGE_BPS)) / 10000n;
 
+        // Check allowance and approve if needed
+        const currentAllowance = await publicClient.readContract({
+          address: tokenAddress,
+          abi: ERC20_ABI,
+          functionName: "allowance",
+          args: [address as `0x${string}`, curveAddress],
+        });
+
+        if (currentAllowance < tokensToSell) {
+          setTradeStatus("Approving token spend...");
+          const approveTx = await walletClient.writeContract({
+            address: tokenAddress,
+            abi: ERC20_ABI,
+            functionName: "approve",
+            args: [curveAddress, tokensToSell],
+            account: address as `0x${string}`,
+            chain: walletClient.chain,
+          });
+          await publicClient.waitForTransactionReceipt({ hash: approveTx });
+        }
+
         setTradeStatus(
           `Selling ~${Number(formatUnits(tokensToSell, 18)).toLocaleString()} tokens for ~${Number(formatEther(ethOut)).toFixed(6)} ETH...`
         );
@@ -298,6 +336,22 @@ export default function StrategyDetail() {
       setExecutingTrade(false);
     }
   }
+
+  // Fetch token data when strategy loads (for execute modal)
+  useEffect(() => {
+    if (!strategy) return;
+    let cancelled = false;
+    async function loadToken() {
+      try {
+        const data = await getToken(strategy!.curve_id);
+        if (!cancelled) setTokenData(data);
+      } catch (err) {
+        console.error("Failed to fetch token data:", err);
+      }
+    }
+    loadToken();
+    return () => { cancelled = true; };
+  }, [strategy?.curve_id]);
 
   useEffect(() => {
     if (!id) return;
@@ -393,6 +447,29 @@ export default function StrategyDetail() {
     setTimeout(() => setStatusMsg(null), 3000);
   }
 
+  function handleExecuteStrategyConfirm(durationMinutes: number, investAmountEth: number) {
+    if (!strategy || !backtestResult || !tokenData || !ethUsdPrice) return;
+
+    const liveStrategy: LiveStrategy = {
+      id: `live-${Date.now()}`,
+      name: strategy.name,
+      token: tokenData,
+      params: strategy.params,
+      backtestResult,
+      investAmountEth,
+      ethUsdPrice,
+      curveAddress: strategy.curve_id,
+      startedAt: Date.now(),
+      durationMs: durationMinutes * 60 * 1000,
+      status: "running",
+      executedTrades: [],
+    };
+
+    onExecuteStrategy?.(liveStrategy);
+    setShowExecuteModal(false);
+    showStatus("Strategy is now LIVE!");
+  }
+
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -435,6 +512,20 @@ export default function StrategyDetail() {
 
   return (
     <div className="h-full overflow-auto">
+      {/* Execute Confirmation Modal */}
+      {tokenData && backtestResult && strategy && (
+        <ExecuteConfirmModal
+          open={showExecuteModal}
+          onClose={() => setShowExecuteModal(false)}
+          onConfirm={handleExecuteStrategyConfirm}
+          token={tokenData}
+          params={strategy.params}
+          strategyName={strategy.name}
+          backtestResult={backtestResult}
+          ethUsdPrice={ethUsdPrice}
+        />
+      )}
+
       <div className="max-w-5xl mx-auto p-6 space-y-6">
         {/* Top bar */}
         <div className="flex items-center justify-between">
@@ -921,6 +1012,33 @@ export default function StrategyDetail() {
               result={backtestResult!}
               loading={backtesting}
             />
+
+            {/* Execute Strategy CTA - shown after backtest results */}
+            {backtestResult && backtestResult.totalTrades > 0 && !backtesting && tokenData && (
+              <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-phosphor/[0.06] to-transparent border border-phosphor/15 rounded-lg mt-4">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-bold text-white">
+                    Ready to go live?
+                  </p>
+                  <p className="text-[0.6rem] text-gray-500 font-mono mt-0.5">
+                    Deploy this strategy with {strategy.params.positionSizeEth} ETH
+                    {ethUsdPrice && (
+                      <span className="text-gray-600">
+                        {" "}(≈ ${(strategy.params.positionSizeEth * ethUsdPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                      </span>
+                    )}
+                    {" "}on {strategy.token_name}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowExecuteModal(true)}
+                  className="flex items-center gap-2 bg-phosphor text-black px-5 py-2.5 text-xs uppercase font-black rounded-lg hover:shadow-[0_0_20px_rgba(0,255,65,0.4)] transition-all shrink-0"
+                >
+                  <Rocket className="w-3.5 h-3.5" />
+                  Execute Strategy
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

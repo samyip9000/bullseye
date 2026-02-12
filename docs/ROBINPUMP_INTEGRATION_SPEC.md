@@ -47,6 +47,7 @@ Our integration provides:
 
 ### 3.2 External Dependencies
 
+
 | Contract | Mainnet Address | Purpose |
 |---|---|---|
 | **WETH** | `0x4200000000000000000000000000000000000006` | Wrapped ETH (Base standard) |

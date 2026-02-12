@@ -192,3 +192,65 @@ export async function runQuickBacktest(
     body: JSON.stringify({ curveId, params }),
   });
 }
+
+// ---------- Telegram ----------
+
+export interface TelegramPairResponse {
+  success: boolean;
+  status: string;
+  telegramUsername: string | null;
+  message: string;
+}
+
+export interface TelegramStatusResponse {
+  connected: boolean;
+  status: string | null;
+  telegramUsername?: string | null;
+  pairedAt?: string;
+}
+
+export async function pairTelegram(
+  walletAddress: string,
+  pairingCode: string
+): Promise<TelegramPairResponse> {
+  return fetchJson("/telegram/pair", {
+    method: "POST",
+    body: JSON.stringify({ walletAddress, pairingCode }),
+  });
+}
+
+export async function getTelegramStatus(
+  walletAddress: string
+): Promise<TelegramStatusResponse> {
+  return fetchJson(`/telegram/status?walletAddress=${encodeURIComponent(walletAddress)}`);
+}
+
+export async function disconnectTelegram(
+  walletAddress: string
+): Promise<{ success: boolean; message: string }> {
+  return fetchJson("/telegram/disconnect", {
+    method: "DELETE",
+    body: JSON.stringify({ walletAddress }),
+  });
+}
+
+// ---------- Telegram Actions (remote control) ----------
+
+export interface TelegramAction {
+  id: string;
+  type: "apply_filter" | "open_strategy";
+  payload: Record<string, unknown>;
+  createdAt: string;
+}
+
+export async function getTelegramActions(
+  walletAddress: string
+): Promise<{ actions: TelegramAction[] }> {
+  return fetchJson(
+    `/telegram/actions?walletAddress=${encodeURIComponent(walletAddress)}`
+  );
+}
+
+export async function ackTelegramAction(actionId: string): Promise<void> {
+  await fetchJson(`/telegram/actions/${actionId}/ack`, { method: "POST" });
+}

@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Crosshair, Zap, Activity, LogOut, Copy, Check, Wallet, CircleDollarSign } from "lucide-react";
+import { Crosshair, Zap, Activity, LogOut, Copy, Check, Wallet, CircleDollarSign, Link2 } from "lucide-react";
 import { SignInWithBaseButton } from "@base-org/account-ui/react";
 import { useWallet } from "../contexts/WalletContext";
 import MyWallet from "./MyWallet";
+import ConnectionsPanel from "./ConnectionsPanel";
 
 interface HeaderProps {
   ethUsdPrice: number | null;
@@ -24,6 +25,7 @@ export default function Header({ ethUsdPrice }: HeaderProps) {
   const [copied, setCopied] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showWallet, setShowWallet] = useState(false);
+  const [showConnections, setShowConnections] = useState(false);
 
   useEffect(() => {
     if (ethUsdPrice !== null) setSynced(true);
@@ -146,6 +148,16 @@ export default function Header({ ethUsdPrice }: HeaderProps) {
                       </button>
                       <button
                         onClick={() => {
+                          setShowConnections(true);
+                          setShowMenu(false);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-gray-400 hover:text-phosphor hover:bg-phosphor/5 rounded transition-all"
+                      >
+                        <Link2 className="w-3.5 h-3.5" />
+                        Connections
+                      </button>
+                      <button
+                        onClick={() => {
                           disconnect();
                           setShowMenu(false);
                         }}
@@ -188,6 +200,9 @@ export default function Header({ ethUsdPrice }: HeaderProps) {
 
       {/* My Wallet Panel */}
       <MyWallet open={showWallet} onClose={() => setShowWallet(false)} />
+
+      {/* Connections Panel */}
+      <ConnectionsPanel open={showConnections} onClose={() => setShowConnections(false)} />
     </header>
   );
 }

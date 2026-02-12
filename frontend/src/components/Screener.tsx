@@ -29,6 +29,8 @@ interface ScreenerProps {
   error: string | null;
   onRefresh: () => void;
   onSelectForStrategy: (token: Token) => void;
+  /** Externally-injected filters (e.g. from Telegram). Applied on change. */
+  externalFilters?: { filters: FilterRule[]; query: string } | null;
 }
 
 type SortField =
@@ -191,6 +193,7 @@ export default function Screener({
   error,
   onRefresh,
   onSelectForStrategy,
+  externalFilters,
 }: ScreenerProps) {
   const [filters, setFilters] = useState<FilterRule[]>([]);
   const [search, setSearch] = useState("");
@@ -198,6 +201,15 @@ export default function Screener({
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [screenerName, setScreenerName] = useState("");
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+
+  // Apply external filters (e.g. from Telegram /screen command)
+  useEffect(() => {
+    if (externalFilters) {
+      setFilters(externalFilters.filters);
+      setNlQuery(externalFilters.query);
+      setNlApplied(describeFilters(externalFilters.filters));
+    }
+  }, [externalFilters]);
 
   // Pagination
   const PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;

@@ -7,11 +7,23 @@ import {
   CircleDollarSign,
   Layers,
   ArrowUpRight,
+  Coins,
 } from "lucide-react";
+import { formatUnits } from "viem";
 import { useNavigate } from "react-router-dom";
 import { useWallet } from "../contexts/WalletContext";
 import { getStrategies } from "../services/api";
+import { BONDING_CURVE_ABI, ERC20_ABI } from "../lib/robinpump/abis";
 import type { Strategy } from "../types";
+
+interface TokenHolding {
+  tokenAddress: string;
+  name: string;
+  symbol: string;
+  balance: bigint;
+  curveAddress: string;
+  strategyName: string;
+}
 
 interface MyWalletProps {
   open: boolean;
@@ -26,11 +38,14 @@ const STRATEGY_LABELS: Record<string, string> = {
 };
 
 export default function MyWallet({ open, onClose }: MyWalletProps) {
-  const { address, balances, refreshBalances, truncatedAddress } = useWallet();
+  const { address, balances, refreshBalances, truncatedAddress, publicClient } =
+    useWallet();
   const navigate = useNavigate();
   const [strategies, setStrategies] = useState<Strategy[]>([]);
   const [loadingPositions, setLoadingPositions] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [tokenHoldings, setTokenHoldings] = useState<TokenHolding[]>([]);
+  const [loadingTokens, setLoadingTokens] = useState(false);
 
   // Fetch active positions (strategies)
   useEffect(() => {
@@ -39,6 +54,16 @@ export default function MyWallet({ open, onClose }: MyWalletProps) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, address]);
+
+  // Fetch token holdings whenever strategies change
+  useEffect(() => {
+    if (open && address && strategies.length > 0) {
+      fetchTokenHoldings();
+    } else {
+      setTokenHoldings([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, address, strategies]);
 
   const fetchPositions = async () => {
     setLoadingPositions(true);
@@ -52,9 +77,73 @@ export default function MyWallet({ open, onClose }: MyWalletProps) {
     }
   };
 
+  const fetchTokenHoldings = async () => {
+    if (!address) return;
+    setLoadingTokens(true);
+    try {
+      // Deduplicate by curve_id so we don't fetch the same curve twice
+      const uniqueCurves = new Map<string, Strategy>();
+      for (const s of strategies) {
+        if (s.curve_id && !uniqueCurves.has(s.curve_id)) {
+          uniqueCurves.set(s.curve_id, s);
+        }
+      }
+
+      const holdings: TokenHolding[] = [];
+
+      await Promise.all(
+        Array.from(uniqueCurves.entries()).map(
+          async ([curveAddr, strategy]) => {
+            try {
+              const curveInfo = await publicClient.readContract({
+                address: curveAddr as `0x${string}`,
+                abi: BONDING_CURVE_ABI,
+                functionName: "getCurveInfo",
+              });
+
+              const tokenAddress = curveInfo[0] as `0x${string}`;
+              const name = curveInfo[1] as string;
+              const symbol = curveInfo[2] as string;
+
+              const balance = await publicClient.readContract({
+                address: tokenAddress,
+                abi: ERC20_ABI,
+                functionName: "balanceOf",
+                args: [address as `0x${string}`],
+              });
+
+              if ((balance as bigint) > 0n) {
+                holdings.push({
+                  tokenAddress,
+                  name,
+                  symbol,
+                  balance: balance as bigint,
+                  curveAddress: curveAddr,
+                  strategyName: strategy.name,
+                });
+              }
+            } catch (err) {
+              console.error(
+                `Failed to fetch token for curve ${curveAddr}:`,
+                err
+              );
+            }
+          }
+        )
+      );
+
+      setTokenHoldings(holdings);
+    } catch (err) {
+      console.error("Failed to fetch token holdings:", err);
+    } finally {
+      setLoadingTokens(false);
+    }
+  };
+
   const handleRefresh = async () => {
     setRefreshing(true);
     await Promise.all([refreshBalances(), fetchPositions()]);
+    // Token holdings will auto-refresh via the strategies useEffect
     setRefreshing(false);
   };
 
@@ -184,6 +273,78 @@ export default function MyWallet({ open, onClose }: MyWalletProps) {
                 <span className="text-xs text-gray-500 font-mono">ETH</span>
               </div>
             </div>
+          </div>
+
+          {/* Divider */}
+          <div className="h-px bg-white/[0.05] mx-5" />
+
+          {/* Token Holdings Section */}
+          <div className="p-5">
+            <div className="flex items-center justify-between mb-3">
+              <div className="text-[0.6rem] uppercase tracking-widest text-gray-500 font-bold">
+                Token Holdings
+              </div>
+              {tokenHoldings.length > 0 && (
+                <span className="text-[0.6rem] font-mono text-gray-600 bg-white/[0.03] px-2 py-0.5 rounded">
+                  {tokenHoldings.length}
+                </span>
+              )}
+            </div>
+
+            {loadingTokens ? (
+              <div className="flex items-center justify-center py-6">
+                <div className="w-5 h-5 border-2 border-phosphor/20 border-t-phosphor rounded-full animate-spin" />
+              </div>
+            ) : tokenHoldings.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-6 text-center">
+                <Coins className="w-7 h-7 text-gray-600 mb-2" />
+                <p className="text-xs text-gray-500 font-mono">
+                  No tokens held
+                </p>
+                <p className="text-[0.6rem] text-gray-600 mt-1">
+                  Tokens you buy will appear here
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {tokenHoldings.map((holding) => (
+                  <div
+                    key={holding.tokenAddress}
+                    className="bg-white/[0.02] border border-white/[0.06] rounded-lg p-3 hover:border-phosphor/15 transition-all"
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-phosphor/10 flex items-center justify-center">
+                          <span className="text-[0.5rem] font-black text-phosphor">
+                            {holding.symbol.slice(0, 2).toUpperCase()}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-xs font-bold text-white">
+                            {holding.symbol}
+                          </span>
+                          <span className="text-[0.55rem] text-gray-500 font-mono ml-2">
+                            {holding.name}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-sm font-bold text-phosphor font-mono">
+                        {Number(
+                          formatUnits(holding.balance, 18)
+                        ).toLocaleString(undefined, {
+                          maximumFractionDigits: 2,
+                        })}
+                      </span>
+                      <span className="text-[0.55rem] text-gray-600 font-mono truncate max-w-[120px]">
+                        via {holding.strategyName}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Divider */}

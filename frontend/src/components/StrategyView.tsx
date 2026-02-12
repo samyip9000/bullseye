@@ -9,14 +9,17 @@ import {
   History,
   ExternalLink,
   Loader2,
+  Rocket,
 } from "lucide-react";
 import BacktestResults from "./BacktestResults";
+import ExecuteConfirmModal from "./ExecuteConfirmModal";
 import type {
   Token,
   StrategyType,
   StrategyParams,
   BacktestResult,
   HistoricalTrade,
+  LiveStrategy,
 } from "../types";
 import {
   createStrategy,
@@ -29,6 +32,9 @@ interface StrategyViewProps {
   tokens: Token[];
   selectedToken: Token | null;
   onTokenSelect: (token: Token | null) => void;
+  onExecuteStrategy?: (strategy: LiveStrategy) => void;
+  ethUsdPrice?: number | null;
+  walletEthBalance?: string | null;
 }
 
 const STRATEGY_TYPES: { value: StrategyType; label: string; desc: string }[] = [
@@ -67,6 +73,9 @@ export default function StrategyView({
   tokens,
   selectedToken,
   onTokenSelect,
+  onExecuteStrategy,
+  ethUsdPrice,
+  walletEthBalance,
 }: StrategyViewProps) {
   const [params, setParams] = useState<StrategyParams>(DEFAULT_PARAMS);
   const [strategyName, setStrategyName] = useState("");
@@ -83,6 +92,7 @@ export default function StrategyView({
   );
   const [loadingTrades, setLoadingTrades] = useState(false);
   const [tradesError, setTradesError] = useState<string | null>(null);
+  const [showExecuteModal, setShowExecuteModal] = useState(false);
 
   // Fetch historical orders when selected token changes
   useEffect(() => {
@@ -185,8 +195,50 @@ export default function StrategyView({
     }
   };
 
+  const handleExecuteConfirm = (durationMinutes: number, investAmountEth: number) => {
+    if (!selectedToken || !backtestResult || !ethUsdPrice) return;
+
+    const liveStrategy: LiveStrategy = {
+      id: `live-${Date.now()}`,
+      name:
+        strategyName || `${params.entryType} on ${selectedToken.symbol}`,
+      token: selectedToken,
+      params,
+      backtestResult,
+      investAmountEth,
+      ethUsdPrice,
+      curveAddress: selectedToken.id,
+      startedAt: Date.now(),
+      durationMs: durationMinutes * 60 * 1000,
+      status: "running",
+      executedTrades: [],
+    };
+
+    onExecuteStrategy?.(liveStrategy);
+    setShowExecuteModal(false);
+    setStatusMsg("Strategy is now LIVE!");
+    setTimeout(() => setStatusMsg(null), 3000);
+  };
+
   return (
     <div className="h-full flex">
+      {/* Execute Confirmation Modal */}
+      {selectedToken && backtestResult && (
+        <ExecuteConfirmModal
+          open={showExecuteModal}
+          onClose={() => setShowExecuteModal(false)}
+          onConfirm={handleExecuteConfirm}
+          token={selectedToken}
+          params={params}
+          strategyName={
+            strategyName || `${params.entryType} on ${selectedToken.symbol}`
+          }
+          backtestResult={backtestResult}
+          ethUsdPrice={ethUsdPrice}
+          walletEthBalance={walletEthBalance}
+        />
+      )}
+
       {/* Left Panel - Strategy Config */}
       <div className="w-[380px] border-r border-white/[0.03] flex flex-col overflow-hidden shrink-0">
         <div className="p-4 border-b border-white/[0.03]">
@@ -384,21 +436,33 @@ export default function StrategyView({
               </div>
 
               <div className="col-span-2">
-                <label className="text-[0.55rem] text-gray-600 block mb-1">
-                  Position Size (ETH)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  value={params.positionSizeEth}
-                  onChange={(e) =>
-                    setParams((p) => ({
-                      ...p,
-                      positionSizeEth: parseFloat(e.target.value) || 0.1,
-                    }))
-                  }
-                  className="w-full bg-white/[0.03] border border-white/[0.08] text-phosphor font-mono text-xs px-2 py-1.5 rounded"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-[0.55rem] text-gray-600">
+                    Position Size
+                  </label>
+                  {ethUsdPrice && params.positionSizeEth > 0 && (
+                    <span className="text-[0.55rem] font-mono text-gray-500">
+                      ≈ ${(params.positionSizeEth * ethUsdPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  )}
+                </div>
+                <div className="relative">
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={params.positionSizeEth}
+                    onChange={(e) =>
+                      setParams((p) => ({
+                        ...p,
+                        positionSizeEth: parseFloat(e.target.value) || 0.1,
+                      }))
+                    }
+                    className="w-full bg-white/[0.03] border border-white/[0.08] text-phosphor font-mono text-xs pl-2 pr-12 py-1.5 rounded"
+                  />
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[0.6rem] font-mono font-bold text-gray-500">
+                    ETH
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -427,6 +491,17 @@ export default function StrategyView({
             <Save className="w-3.5 h-3.5" />
             Save & Backtest
           </button>
+
+          {/* Execute Button - only visible after backtest */}
+          {backtestResult && backtestResult.totalTrades > 0 && selectedToken && (
+            <button
+              onClick={() => setShowExecuteModal(true)}
+              className="w-full flex items-center justify-center gap-2 bg-phosphor text-black px-4 py-2.5 text-xs uppercase font-black rounded hover:shadow-[0_0_20px_rgba(0,255,65,0.4)] transition-all animate-in fade-in slide-in-from-bottom-2 duration-300"
+            >
+              <Rocket className="w-3.5 h-3.5" />
+              Execute Strategy
+            </button>
+          )}
         </div>
       </div>
 
@@ -482,10 +557,39 @@ export default function StrategyView({
                   </div>
                 </div>
               ) : (
-                <BacktestResults
-                  result={backtestResult!}
-                  loading={backtesting}
-                />
+                <>
+                  <BacktestResults
+                    result={backtestResult!}
+                    loading={backtesting}
+                  />
+
+                  {/* Execute Strategy CTA - shown after backtest results */}
+                  {backtestResult && backtestResult.totalTrades > 0 && !backtesting && (
+                    <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-phosphor/[0.06] to-transparent border border-phosphor/15 rounded-lg">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-bold text-white">
+                          Ready to go live?
+                        </p>
+                        <p className="text-[0.6rem] text-gray-500 font-mono mt-0.5">
+                          Deploy this strategy with {params.positionSizeEth} ETH
+                          {ethUsdPrice && (
+                            <span className="text-gray-600">
+                              {" "}(≈ ${(params.positionSizeEth * ethUsdPrice).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})
+                            </span>
+                          )}
+                          {" "}on ${selectedToken.symbol}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setShowExecuteModal(true)}
+                        className="flex items-center gap-2 bg-phosphor text-black px-5 py-2.5 text-xs uppercase font-black rounded-lg hover:shadow-[0_0_20px_rgba(0,255,65,0.4)] transition-all shrink-0"
+                      >
+                        <Rocket className="w-3.5 h-3.5" />
+                        Execute Strategy
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Historical Orders Section */}

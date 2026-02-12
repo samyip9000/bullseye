@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { serveStatic } from "hono/bun";
 import { join } from "path";
+import localtunnel from "localtunnel";
 import tokenRoutes from "./routes/tokens";
 import screenerRoutes from "./routes/screeners";
 import strategyRoutes from "./routes/strategies";
@@ -71,6 +72,18 @@ console.log(`
 
 // Start Telegram bot polling in the background
 startBot();
+
+// ---------- Local Tunnel (pass -lt flag to enable) ----------
+if (process.argv.includes("-lt")) {
+  (async () => {
+    const tunnel = await localtunnel({ port: PORT });
+    console.log(`  🌐 Tunnel URL: ${tunnel.url}`);
+
+    tunnel.on("close", () => {
+      console.log("  🌐 Tunnel closed");
+    });
+  })();
+}
 
 export default {
   port: PORT,

@@ -143,6 +143,47 @@ export interface HistoricalTrade {
   txHash: string;
 }
 
+// ---------- Live Strategy Execution ----------
+
+export interface LiveExecutedTrade {
+  side: "buy" | "sell";
+  ethAmount: number; // ETH spent (buy) or received (sell)
+  tokenAmount: number; // tokens received (buy) or sold (sell)
+  price: number; // token price in ETH at execution
+  timestamp: number; // unix ms
+  txHash?: string;
+  status: "pending" | "confirmed" | "failed";
+  pnlPercent?: number; // only on sell
+  pnlEth?: number; // only on sell
+}
+
+export interface LiveStrategyResult {
+  totalPnlEth: number;
+  totalPnlPercent: number;
+  totalVolumeEth: number;
+  tradesExecuted: number;
+  buys: number;
+  sells: number;
+  wins: number;
+  losses: number;
+}
+
+export interface LiveStrategy {
+  id: string;
+  name: string;
+  token: Token;
+  params: StrategyParams;
+  backtestResult: BacktestResult;
+  investAmountEth: number;
+  ethUsdPrice: number;
+  curveAddress: string;
+  startedAt: number; // unix ms
+  durationMs: number; // how long the strategy runs
+  status: "running" | "completed" | "cancelled";
+  executedTrades: LiveExecutedTrade[];
+  result?: LiveStrategyResult; // populated when strategy ends
+}
+
 // ---------- Wallet ----------
 
 export interface WalletUser {
