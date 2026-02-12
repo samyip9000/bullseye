@@ -11,6 +11,8 @@ Bullseye turns Telegram into a remote control for on-chain trading. Scan hundred
 
 ![Strategy Builder](screenshots/strategy.png)
 
+![Strategy Executioner](screenshots/strategy_detail.png)
+
 ---
 
 ## Why Bullseye
